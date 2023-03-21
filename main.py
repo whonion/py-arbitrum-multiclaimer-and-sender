@@ -1,0 +1,108 @@
+import os
+from web3 import Web3
+from web3.contract import Contract
+from web3.middleware import geth_poa_middleware
+from loguru import logger
+from sys import stderr
+from multiprocessing.dummy import Pool
+from dotenv import load_dotenv
+
+from transfer import transferTokens
+
+load_dotenv()
+TOKEN_CONTRACT = os.getenv('TOKEN_CONTRACT')
+CLAIM_CONTRACT = os.getenv('CLAIM_CONTRACT')
+RPC_ARBI = os.getenv('RPC_ARBI')
+RPC_MAIN = os.getenv('RPC_MAIN')
+
+logger.remove()
+logger.add(stderr, format="<white>{time:HH:mm:ss}</white>"
+                          " | <level>{level: <8}</level>"
+                          " | <cyan>{line}</cyan>"
+                          " - <white>{message}</white>")
+def send_tx(private_key: str):
+    address = None
+    try:
+        address = Web3.to_checksum_address(w3.eth.account.from_key(private_key).address)
+        gas_price = w3.to_wei('0.1', 'gwei')
+        gas_limit = 600000    
+        nonce = w3.eth.get_transaction_count(address)
+        tx_claim = {
+            'nonce': nonce,
+            'gas': gas_limit,
+            'gasPrice': gas_price,
+            }
+        transaction = contract_claim.functions.claim().build_transaction(tx_claim)
+        # Sign the transaction with the receiver's private key
+        signed_txn = w3.eth.account.sign_transaction(transaction,private_key=private_key)
+        
+        # Send the transaction to the network
+        tx_hash = w3.eth.send_raw_transaction(signed_txn.rawTransaction)
+        # Wait for the transaction to be mined
+        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+
+        tx_hash = w3.to_hex(w3.keccak(signed_txn.rawTransaction))
+        # Check if the transaction was successful
+        if receipt['status'] == 1:
+            # Get the amount of tokens claimed
+            claimable_tokens = contract_claim.functions.claimableTokens(address).call()
+            print(f'{claimable_tokens} tokens were successfully claimed to {address}.')
+            logger.info(f'{address} | https://arbiscan.io/tx/{tx_hash}')
+            # Set up the transaction parameters for sending tokens
+            token_amount = claimable_tokens
+            nonce = w3.eth.get_transaction_count(address)
+            token_transaction = contract_token.functions.transfer(recipient_address, token_amount).build_transaction({
+                'nonce': nonce,
+                'gasPrice': gas_price,
+                'gas': gas_limit,
+            })        
+        else:
+            raise ValueError(f"Claim transaction failed with receipt status {receipt['status']}")
+        
+        if token_transaction:
+            signed_txn = w3.eth.account.sign_transaction(token_transaction, private_key=private_key)
+            tx_hash = w3.eth.send_raw_transaction(signed_txn.rawTransaction)
+            logger.info(f'Sending tokens from {address} to {recipient_address} | https://arbiscan.io/tx/{tx_hash.hex()}')
+
+            # Wait for the transaction to be mined
+            tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+            logger.info(f'Tokens sent from {address} to {recipient_address} | Transaction confirmed in block {tx_receipt.blockNumber}')
+        else:
+            raise ValueError("Token transaction was not initialized")
+    except Exception as error:
+        logger.error(f'{address} | {error}')
+
+if __name__ == '__main__':
+    print('-' * 108)
+    print((' '*32)+'ARBITRUM MULTI AND SENDER CLAIMER'+(' '*32))
+    print('-' * 108)
+    with open('accounts.txt', encoding='utf-8-sig') as file:
+        private_keys = [row.strip() for row in file]
+
+    w3 = Web3(Web3.HTTPProvider(RPC_ARBI))
+    w3.middleware_onion.inject(geth_poa_middleware, layer=0)
+    
+    with open('recipient_addresses.txt', 'r', encoding='utf-8-sig') as file:
+            recipient_address = file.read().strip().replace('\n', '').replace(' ', '')  
+    #load ABI for contracts
+    with open('ABI_CLAIM.txt', 'r', encoding='utf-8-sig') as file:
+            CLAIM_ABI = file.read().strip().replace('\n', '').replace(' ', '') 
+    with open('ABI_TOKEN.txt', 'r', encoding='utf-8-sig') as file:
+            TOKEN_ABI = file.read().strip().replace('\n', '').replace(' ', '')   
+    contract_claim = w3.eth.contract(address=Web3.to_checksum_address(CLAIM_CONTRACT),
+                               abi=CLAIM_ABI)
+    contract_token = w3.eth.contract(address=Web3.to_checksum_address(TOKEN_CONTRACT),
+                               abi=TOKEN_ABI)    
+    logger.info(f'Loads {len(private_keys)} wallets')
+
+    mainnet = Web3(Web3.HTTPProvider(RPC_MAIN))
+    target_block = 16890400
+    while True:
+        #Get the current block number
+        current_block = mainnet.eth.block_number
+        print(f'Currect Ethereum block: {current_block} The transaction will be sent after the block: {target_block}')
+        #Check if the target block has been reached
+        if current_block >= target_block:
+            with Pool(processes=len(private_keys)) as executor:
+                executor.map(send_tx, private_keys,len(recipient_address))
+            input('Press Enter To Exit..')
