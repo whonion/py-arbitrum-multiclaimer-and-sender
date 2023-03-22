@@ -17,7 +17,7 @@ _example of `.env`-file_
 ```sh
 TOKEN_CONTRACT = '0xC4ed0A9Ea70d5bCC69f748547650d32cC219D882'
 CLAIM_CONTRACT = '0x67a24CE4321aB3aF51c2D0a4801c3E111D88C9d9'
-
+ARBITRUM_MULTI_CALL = '0x842eC2c7D803033Edf55E478F461FC547Bc54EB2'
 RPC_ARB = 'https://arb-mainnet.g.alchemy.com/v2/{YOU_API_KEY}'
 RPC_MAIN = 'https://eth-mainnet.g.alchemy.com/v2/{YOU_API_KEY}'
 ```
