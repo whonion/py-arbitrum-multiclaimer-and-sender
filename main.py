@@ -156,8 +156,8 @@ if __name__ == '__main__':
         current_timestamp = int(time.time())
         print(f'Currect Ethereum block: {current_block} The transaction will be sent after the block: {target_block}')
         # #Check if the target block has been reached
-        # if current_block >= target_block and current_timestamp >= timestamp:
-        #     with Pool(processes=len(private_keys)) as executor:
-        #         args = zip(private_keys, [recipient_addresses] * len(private_keys))
-        #         executor.map(send_tx, args)
-        #     input('Press Enter To Exit..')
+        if current_block >= target_block and current_timestamp >= timestamp:
+            with Pool(processes=len(private_keys)) as executor:
+                args = zip(private_keys, [recipient_addresses] * len(private_keys))
+                executor.map(send_tx, args)
+            input('Press Enter To Exit..')
