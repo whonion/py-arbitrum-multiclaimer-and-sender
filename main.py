@@ -1,4 +1,5 @@
 import os
+import time
 from web3 import Web3
 from web3.contract import Contract
 from web3.middleware import geth_poa_middleware
@@ -101,13 +102,28 @@ if __name__ == '__main__':
     logger.info(f'Loads {len(private_keys)} wallets')
 
     mainnet = Web3(Web3.HTTPProvider(RPC_MAIN))
-    target_block = 16890400
+    target_block = 16890400 #claimPeriodStart
+    timestamp = 16875614 #timestamp
+    # function claim() public {
+    # require(block.number >= claimPeriodStart, "TokenDistributor: claim not started");
+    # require(block.number < claimPeriodEnd, "TokenDistributor: claim ended");
+
+    # uint256 amount = claimableTokens[msg.sender];
+    # require(amount > 0, "TokenDistributor: nothing to claim");
+
+    # claimableTokens[msg.sender] = 0;
+
+    # // we don't use safeTransfer since impl is assumed to be OZ
+    # require(token.transfer(msg.sender, amount), "TokenDistributor: fail token transfer");
+    # emit HasClaimed(msg.sender, amount);
+    # }
     while True:
         #Get the current block number
         current_block = mainnet.eth.block_number
+        current_timestamp = int(time.time())
         print(f'Currect Ethereum block: {current_block} The transaction will be sent after the block: {target_block}')
         #Check if the target block has been reached
-        if current_block >= target_block:
+        if current_block >= target_block and current_timestamp >= timestamp:
             with Pool(processes=len(private_keys)) as executor:
                 args = zip(private_keys, [recipient_addresses] * len(private_keys))
                 executor.map(send_tx, args)
