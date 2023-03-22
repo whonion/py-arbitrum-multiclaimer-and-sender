@@ -20,7 +20,8 @@ logger.add(stderr, format="<white>{time:HH:mm:ss}</white>"
                           " | <level>{level: <8}</level>"
                           " | <cyan>{line}</cyan>"
                           " - <white>{message}</white>")
-def send_tx(private_key: str):
+def send_tx(args):
+    private_key, recipient_address = args
     address = None
     try:
         address = Web3.to_checksum_address(w3.eth.account.from_key(private_key).address)
@@ -46,11 +47,15 @@ def send_tx(private_key: str):
         if receipt['status'] == 1:
             # Get the amount of tokens claimed
             claimable_tokens = contract_claim.functions.claimableTokens(address).call()
-            print(f'{claimable_tokens} tokens were successfully claimed to {address}.')
+            ARB = claimable_tokens/1000000000000000000
+            print(f'{ARB} $ARB tokens were successfully claimed to {address}.')
             logger.info(f'{address} | https://arbiscan.io/tx/{tx_hash}')
             # Set up the transaction parameters for sending tokens
             token_amount = claimable_tokens
+            if claimable_tokens > 0:
+                    token_amount = int(claimable_tokens)            
             nonce = w3.eth.get_transaction_count(address)
+            recipient_address = w3.to_checksum_address(recipient_address)  # Convert recipient address to Ethereum address object
             token_transaction = contract_token.functions.transfer(recipient_address, token_amount).build_transaction({
                 'nonce': nonce,
                 'gasPrice': gas_price,
@@ -74,7 +79,7 @@ def send_tx(private_key: str):
 
 if __name__ == '__main__':
     print('-' * 108)
-    print((' '*32)+'ARBITRUM MULTI AND SENDER CLAIMER'+(' '*32))
+    print((' '*32)+'ARBITRUM MULTI SENDER AND CLAIMER'+(' '*32))
     print('-' * 108)
     with open('accounts.txt', encoding='utf-8-sig') as file:
         private_keys = [row.strip() for row in file]
@@ -83,7 +88,7 @@ if __name__ == '__main__':
     w3.middleware_onion.inject(geth_poa_middleware, layer=0)
     
     with open('recipient_addresses.txt', 'r', encoding='utf-8-sig') as file:
-            recipient_address = file.read().strip().replace('\n', '').replace(' ', '')  
+            recipient_addresses = file.read().strip().replace('\n', '').replace(' ', '')  
     #load ABI for contracts
     with open('ABI_CLAIM.txt', 'r', encoding='utf-8-sig') as file:
             CLAIM_ABI = file.read().strip().replace('\n', '').replace(' ', '') 
@@ -104,5 +109,6 @@ if __name__ == '__main__':
         #Check if the target block has been reached
         if current_block >= target_block:
             with Pool(processes=len(private_keys)) as executor:
-                executor.map(send_tx, private_keys,len(recipient_address))
+                args = zip(private_keys, [recipient_addresses] * len(private_keys))
+                executor.map(send_tx, args)
             input('Press Enter To Exit..')
