@@ -21,19 +21,38 @@ logger.add(stderr, format="<white>{time:HH:mm:ss}</white>"
                           " | <level>{level: <8}</level>"
                           " | <cyan>{line}</cyan>"
                           " - <white>{message}</white>")
+def calculateGasPrice(private_key,tx:dict):
+        w3 = Web3(Web3.HTTPProvider(RPC_ARBI))
+        w3.middleware_onion.inject(geth_poa_middleware, layer=0)
+        address = Web3.to_checksum_address(w3.eth.account.from_key(private_key).address)
+        gas_price = w3.to_wei(str(w3.eth.gas_price), 'wei')
+        gas_limit = 600000   
+        nonce = w3.eth.get_transaction_count(address)
+        tx = {
+            'nonce': nonce,
+            'gas': gas_limit,
+            'gasPrice': gas_price,
+        }              
+        estimated_gas = w3.eth.estimate_gas(tx)
+        gas_limit = int(estimated_gas * 1.3)
+        # update the update the gas-parameters of tx
+        tx['gas'] = gas_limit
+        return tx
 def send_tx(args):
     private_key, recipient_address = args
     address = None
     try:
         address = Web3.to_checksum_address(w3.eth.account.from_key(private_key).address)
-        gas_price = w3.to_wei('0.1', 'gwei')
-        gas_limit = 600000    
+        gas_price = w3.to_wei(str(w3.eth.gas_price), 'wei')
+        gas_limit = 600000   
         nonce = w3.eth.get_transaction_count(address)
         tx_claim = {
             'nonce': nonce,
             'gas': gas_limit,
             'gasPrice': gas_price,
-            }
+        }      
+        #recalculate gas
+        tx_claim = calculateGasPrice(private_key=private_key,tx=tx_claim)
         transaction = contract_claim.functions.claim().build_transaction(tx_claim)
         # Sign the transaction with the receiver's private key
         signed_txn = w3.eth.account.sign_transaction(transaction,private_key=private_key)
@@ -45,7 +64,7 @@ def send_tx(args):
 
         tx_hash = w3.to_hex(w3.keccak(signed_txn.rawTransaction))
         # Check if the transaction was successful
-        if receipt['status'] == 1:
+        if receipt['status'] != 1:
             # Get the amount of tokens claimed
             claimable_tokens = contract_claim.functions.claimableTokens(address).call()
             ARB = claimable_tokens/1000000000000000000
@@ -56,12 +75,15 @@ def send_tx(args):
             if claimable_tokens > 0:
                     token_amount = int(claimable_tokens)            
             nonce = w3.eth.get_transaction_count(address)
-            recipient_address = w3.to_checksum_address(recipient_address)  # Convert recipient address to Ethereum address object
-            token_transaction = contract_token.functions.transfer(recipient_address, token_amount).build_transaction({
+            gas_price = w3.to_wei(str(w3.eth.gas_price), 'wei')
+            tx_send = {
                 'nonce': nonce,
                 'gasPrice': gas_price,
-                'gas': gas_limit,
-            })        
+                'gas': gas_limit
+            }              
+            tx_send = calculateGasPrice(private_key=private_key,tx=tx_send)
+            recipient_address = w3.to_checksum_address(recipient_address)  # Convert recipient address to Ethereum address object
+            token_transaction = contract_token.functions.transfer(recipient_address, token_amount).build_transaction(tx_send)        
         else:
             raise ValueError(f"Claim transaction failed with receipt status {receipt['status']}")
         
