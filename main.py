@@ -8,19 +8,30 @@ from sys import stderr
 from multiprocessing.dummy import Pool
 from dotenv import load_dotenv
 
-from transfer import transferTokens
+#from transfer import transferTokens
 
 load_dotenv()
 TOKEN_CONTRACT = os.getenv('TOKEN_CONTRACT')
 CLAIM_CONTRACT = os.getenv('CLAIM_CONTRACT')
+MULTICALL = os.getenv('ARBITRUM_MULTI_CALL')
 RPC_ARBI = os.getenv('RPC_ARBI')
-RPC_MAIN = os.getenv('RPC_MAIN')
+#RPC_MAIN = os.getenv('RPC_MAIN')
 
 logger.remove()
 logger.add(stderr, format="<white>{time:HH:mm:ss}</white>"
                           " | <level>{level: <8}</level>"
                           " | <cyan>{line}</cyan>"
                           " - <white>{message}</white>")
+def getL1blockNumber() -> int:
+    #load ABI for Arbitrum multicall contracts
+    with open('MULTICALL_ABI.txt', 'r', encoding='utf-8-sig') as file:
+            MULTICALL_ABI = file.read().strip().replace('\n', '').replace(' ', '') 
+    l1 = Web3(Web3.HTTPProvider(RPC_ARBI))
+    l1.middleware_onion.inject(geth_poa_middleware, layer=0)
+    multicall = l1.eth.contract(address=Web3.to_checksum_address(MULTICALL),abi=MULTICALL_ABI)
+    block_number = multicall.functions.getL1BlockNumber().call()
+    return int(block_number)
+
 def calculateGasPrice(private_key,tx:dict):
         w3 = Web3(Web3.HTTPProvider(RPC_ARBI))
         w3.middleware_onion.inject(geth_poa_middleware, layer=0)
@@ -123,7 +134,7 @@ if __name__ == '__main__':
                                abi=TOKEN_ABI)    
     logger.info(f'Loads {len(private_keys)} wallets')
 
-    mainnet = Web3(Web3.HTTPProvider(RPC_MAIN))
+    #mainnet = Web3(Web3.HTTPProvider(RPC_MAIN))
     target_block = 16890400 #claimPeriodStart
     timestamp = 16875614 #timestamp
     # function claim() public {
@@ -141,12 +152,12 @@ if __name__ == '__main__':
     # }
     while True:
         #Get the current block number
-        current_block = mainnet.eth.block_number
+        current_block = getL1blockNumber()
         current_timestamp = int(time.time())
         print(f'Currect Ethereum block: {current_block} The transaction will be sent after the block: {target_block}')
-        #Check if the target block has been reached
-        if current_block >= target_block and current_timestamp >= timestamp:
-            with Pool(processes=len(private_keys)) as executor:
-                args = zip(private_keys, [recipient_addresses] * len(private_keys))
-                executor.map(send_tx, args)
-            input('Press Enter To Exit..')
+        # #Check if the target block has been reached
+        # if current_block >= target_block and current_timestamp >= timestamp:
+        #     with Pool(processes=len(private_keys)) as executor:
+        #         args = zip(private_keys, [recipient_addresses] * len(private_keys))
+        #         executor.map(send_tx, args)
+        #     input('Press Enter To Exit..')
