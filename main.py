@@ -64,7 +64,7 @@ def send_tx(args):
 
         tx_hash = w3.to_hex(w3.keccak(signed_txn.rawTransaction))
         # Check if the transaction was successful
-        if receipt['status'] != 1:
+        if receipt['status'] == 1:
             # Get the amount of tokens claimed
             claimable_tokens = contract_claim.functions.claimableTokens(address).call()
             ARB = claimable_tokens/1000000000000000000
